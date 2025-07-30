@@ -53,6 +53,8 @@ function getChannelTagType(channelType: string) {
       return "info";
     case "anthropic":
       return "warning";
+    case "tavily":
+      return "primary";
     default:
       return "default";
   }
@@ -101,6 +103,7 @@ function handleGroupCreated(group: Group) {
                 <span v-if="group.channel_type === 'openai'">🤖</span>
                 <span v-else-if="group.channel_type === 'gemini'">💎</span>
                 <span v-else-if="group.channel_type === 'anthropic'">🧠</span>
+                <span v-else-if="group.channel_type === 'tavily'">🔍</span>
                 <span v-else>🔧</span>
               </div>
               <div class="group-content">

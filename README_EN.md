@@ -33,6 +33,7 @@ GPT-Load serves as a transparent proxy service, completely preserving the native
 - **OpenAI Format**: Official OpenAI API, Azure OpenAI, and other OpenAI-compatible services
 - **Google Gemini Format**: Native APIs for Gemini Pro, Gemini Pro Vision, and other models
 - **Anthropic Claude Format**: Claude series models, supporting high-quality conversations and text generation
+- **Tavily Format**: Tavily search and content extraction API, supporting web search, content extraction, site crawling, and more
 
 ## Quick Start
 
@@ -173,10 +174,10 @@ GPT-Load adopts a dual-layer configuration architecture:
 
 **Authentication & Database Configuration:**
 
-| Setting             | Environment Variable | Default              | Description                                         |
-| ------------------- | -------------------- | -------------------- | --------------------------------------------------- |
-| Admin Key           | `AUTH_KEY`           | `sk-123456`          | Access authentication key for the **management end**|
-| Database Connection | `DATABASE_DSN`       | `./data/gpt-load.db` | Database connection string (DSN) or file path       |
+| Setting             | Environment Variable | Default              | Description                                             |
+| ------------------- | -------------------- | -------------------- | ------------------------------------------------------- |
+| Admin Key           | `AUTH_KEY`           | `sk-123456`          | Access authentication key for the **management end**    |
+| Database Connection | `DATABASE_DSN`       | `./data/gpt-load.db` | Database connection string (DSN) or file path           |
 | Redis Connection    | `REDIS_DSN`          | -                    | Redis connection string, uses memory storage when empty |
 
 **Performance & CORS Configuration:**
@@ -203,10 +204,10 @@ GPT-Load adopts a dual-layer configuration architecture:
 
 GPT-Load automatically reads proxy settings from environment variables to make requests to upstream AI providers.
 
-| Setting     | Environment Variable | Default | Description                                     |
-| ----------- | -------------------- | ------- | ----------------------------------------------- |
-| HTTP Proxy  | `HTTP_PROXY`         | -       | Proxy server address for HTTP requests          |
-| HTTPS Proxy | `HTTPS_PROXY`        | -       | Proxy server address for HTTPS requests         |
+| Setting     | Environment Variable | Default | Description                                                  |
+| ----------- | -------------------- | ------- | ------------------------------------------------------------ |
+| HTTP Proxy  | `HTTP_PROXY`         | -       | Proxy server address for HTTP requests                       |
+| HTTPS Proxy | `HTTPS_PROXY`        | -       | Proxy server address for HTTPS requests                      |
 | No Proxy    | `NO_PROXY`           | -       | Comma-separated list of hosts or domains to bypass the proxy |
 
 Supported Proxy Protocol Formats:
@@ -221,12 +222,12 @@ Supported Proxy Protocol Formats:
 
 **Basic Settings:**
 
-| Setting            | Field Name                           | Default                 | Group Override | Description                                  |
-| ------------------ | ------------------------------------ | ----------------------- | -------------- | -------------------------------------------- |
-| Project URL        | `app_url`                            | `http://localhost:3001` | ❌             | Project base URL                             |
-| Log Retention Days | `request_log_retention_days`         | 7                       | ❌             | Request log retention days, 0 for no cleanup |
-| Log Write Interval | `request_log_write_interval_minutes` | 1                       | ❌             | Log write to database cycle (minutes)        |
-| Global Proxy Keys  | `proxy_keys`                         | Initial value from `AUTH_KEY` | ❌         | Globally effective proxy keys, comma-separated |
+| Setting            | Field Name                           | Default                       | Group Override | Description                                    |
+| ------------------ | ------------------------------------ | ----------------------------- | -------------- | ---------------------------------------------- |
+| Project URL        | `app_url`                            | `http://localhost:3001`       | ❌             | Project base URL                               |
+| Log Retention Days | `request_log_retention_days`         | 7                             | ❌             | Request log retention days, 0 for no cleanup   |
+| Log Write Interval | `request_log_write_interval_minutes` | 1                             | ❌             | Log write to database cycle (minutes)          |
+| Global Proxy Keys  | `proxy_keys`                         | Initial value from `AUTH_KEY` | ❌             | Globally effective proxy keys, comma-separated |
 
 **Request Settings:**
 
@@ -377,6 +378,33 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 - Replace `https://api.anthropic.com` with `http://localhost:3001/proxy/anthropic`
 - Replace the original API Key in `x-api-key` header with the **Proxy Key**
 
+#### 5. Tavily Interface Example
+
+Assuming a group named `tavily` was created:
+
+**Original invocation:**
+
+```bash
+curl -X POST https://api.tavily.com/search \
+  -H "Authorization: Bearer tvly-your-tavily-key" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is artificial intelligence?"}'
+```
+
+**Proxy invocation:**
+
+```bash
+curl -X POST http://localhost:3001/proxy/tavily/search \
+  -H "Authorization: Bearer your-proxy-key" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is artificial intelligence?"}'
+```
+
+**Changes required:**
+
+- Replace `https://api.tavily.com` with `http://localhost:3001/proxy/tavily`
+- Replace the original API Key in `Authorization` header with the **Proxy Key**
+
 #### 6. Supported Interfaces
 
 **OpenAI Format:**
@@ -398,6 +426,15 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 - `/v1/messages` - Message conversations
 - `/v1/models` - Model list (if available)
 - And all other Anthropic native interfaces
+
+**Tavily Format:**
+
+- `/search` - Web search
+- `/extract` - Content extraction
+- `/crawl` - Site crawling (BETA)
+- `/map` - Site mapping (BETA)
+- `/usage` - Usage statistics
+- And all other Tavily native interfaces
 
 #### 7. Client SDK Configuration
 
@@ -446,6 +483,29 @@ response = client.messages.create(
     model="claude-sonnet-4-20250514",
     messages=[{"role": "user", "content": "Hello"}]
 )
+```
+
+**Tavily SDK (Python):**
+
+```python
+from tavily import TavilyClient
+
+# Note: Tavily SDK currently doesn't support custom base_url, use requests library instead
+import requests
+
+def tavily_search_via_proxy(query, proxy_key):
+    url = "http://localhost:3001/proxy/tavily/search"
+    headers = {
+        "Authorization": f"Bearer {proxy_key}",
+        "Content-Type": "application/json"
+    }
+    data = {"query": query}
+    response = requests.post(url, headers=headers, json=data)
+    return response.json()
+
+# Usage example
+result = tavily_search_via_proxy("What is artificial intelligence?", "your-proxy-key")
+print(result)
 ```
 
 > **Important Note**: As a transparent proxy service, GPT-Load completely preserves the native API formats and authentication methods of various AI services. You only need to replace the endpoint address and use the **Proxy Key** configured in the management interface for seamless migration.

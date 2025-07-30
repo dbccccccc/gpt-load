@@ -5,18 +5,18 @@ import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
 import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
 import { Add, Close, HelpCircleOutline, Remove } from "@vicons/ionicons5";
 import {
-  NButton,
-  NCard,
-  NForm,
-  NFormItem,
-  NIcon,
-  NInput,
-  NInputNumber,
-  NModal,
-  NSelect,
-  NTooltip,
-  useMessage,
-  type FormRules,
+    NButton,
+    NCard,
+    NForm,
+    NFormItem,
+    NIcon,
+    NInput,
+    NInputNumber,
+    NModal,
+    NSelect,
+    NTooltip,
+    useMessage,
+    type FormRules,
 } from "naive-ui";
 import { computed, reactive, ref, watch } from "vue";
 
@@ -104,6 +104,8 @@ const testModelPlaceholder = computed(() => {
       return "gemini-2.0-flash-lite";
     case "anthropic":
       return "claude-3-haiku-20240307";
+    case "tavily":
+      return "tavily-search";
     default:
       return "请输入模型名称";
   }
@@ -117,6 +119,8 @@ const upstreamPlaceholder = computed(() => {
       return "https://generativelanguage.googleapis.com";
     case "anthropic":
       return "https://api.anthropic.com";
+    case "tavily":
+      return "https://api.tavily.com";
     default:
       return "请输入上游地址";
   }
@@ -130,6 +134,8 @@ const validationEndpointPlaceholder = computed(() => {
       return "/v1/messages";
     case "gemini":
       return ""; // Gemini 不显示此字段
+    case "tavily":
+      return "/usage";
     default:
       return "请输入验证端点路径";
   }
