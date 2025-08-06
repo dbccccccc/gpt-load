@@ -101,6 +101,7 @@ func registerPublicAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server
 // registerProtectedAPIRoutes 认证API路由
 func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Server) {
 	api.GET("/channel-types", serverHandler.CommonHandler.GetChannelTypes)
+	api.GET("/channel-types-with-metadata", serverHandler.CommonHandler.GetChannelTypesWithMetadata)
 
 	groups := api.Group("/groups")
 	{
@@ -150,6 +151,24 @@ func registerProtectedAPIRoutes(api *gin.RouterGroup, serverHandler *handler.Ser
 	{
 		settings.GET("", serverHandler.GetSettings)
 		settings.PUT("", serverHandler.UpdateSettings)
+	}
+
+	// 脚本管理
+	scripts := api.Group("/scripts")
+	{
+		scripts.GET("", serverHandler.ScriptHandler.GetScripts)
+		scripts.GET("/:id", serverHandler.ScriptHandler.GetScript)
+		scripts.POST("", serverHandler.ScriptHandler.CreateScript)
+		scripts.PUT("/:id", serverHandler.ScriptHandler.UpdateScript)
+		scripts.DELETE("/:id", serverHandler.ScriptHandler.DeleteScript)
+		scripts.POST("/:id/enable", serverHandler.ScriptHandler.EnableScript)
+		scripts.POST("/:id/disable", serverHandler.ScriptHandler.DisableScript)
+		scripts.POST("/:id/reload", serverHandler.ScriptHandler.ReloadScript)
+		scripts.POST("/reload-all", serverHandler.ScriptHandler.ReloadAllScripts)
+		scripts.GET("/active", serverHandler.ScriptHandler.GetActiveScripts)
+		scripts.POST("/validate", serverHandler.ScriptHandler.ValidateScript)
+		scripts.POST("/test", serverHandler.ScriptHandler.TestScript)
+		scripts.GET("/:id/logs", serverHandler.ScriptHandler.GetScriptLogs)
 	}
 }
 

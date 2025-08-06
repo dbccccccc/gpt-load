@@ -136,3 +136,35 @@ type GroupHourlyStat struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+// ChannelScript 对应 channel_scripts 表，用于存储自定义通道脚本
+type ChannelScript struct {
+	ID          uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name        string         `gorm:"type:varchar(255);not null;unique" json:"name"`
+	DisplayName string         `gorm:"type:varchar(255)" json:"display_name"`
+	Description string         `gorm:"type:text" json:"description"`
+	Author      string         `gorm:"type:varchar(255)" json:"author"`
+	Version     string         `gorm:"type:varchar(50);not null" json:"version"`
+	ChannelType string         `gorm:"type:varchar(50);not null;unique" json:"channel_type"`
+	Script      string         `gorm:"type:longtext;not null" json:"script"`
+	Metadata    datatypes.JSON `gorm:"type:json" json:"metadata"`
+	Config      datatypes.JSON `gorm:"type:json" json:"config"`
+	Status      string         `gorm:"type:varchar(50);not null;default:'disabled'" json:"status"` // enabled, disabled, error
+	ErrorMsg    string         `gorm:"type:text" json:"error_msg"`
+	LastError   *time.Time     `json:"last_error"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+}
+
+// ChannelScriptMetadata 脚本元数据结构
+type ChannelScriptMetadata struct {
+	Name                     string            `json:"name"`
+	Version                  string            `json:"version"`
+	Description              string            `json:"description"`
+	Author                   string            `json:"author"`
+	ChannelType              string            `json:"channel_type"`
+	SupportedModels          []string          `json:"supported_models"`
+	DefaultTestModel         string            `json:"default_test_model"`
+	DefaultValidationEndpoint string           `json:"default_validation_endpoint"`
+	RequiredConfig           map[string]string `json:"required_config,omitempty"`
+}

@@ -26,6 +26,7 @@ type Server struct {
 	KeyImportService           *services.KeyImportService
 	LogService                 *services.LogService
 	CommonHandler              *CommonHandler
+	ScriptHandler              *ScriptHandler
 }
 
 // NewServerParams defines the dependencies for the NewServer constructor.
@@ -41,6 +42,7 @@ type NewServerParams struct {
 	KeyImportService           *services.KeyImportService
 	LogService                 *services.LogService
 	CommonHandler              *CommonHandler
+	ScriptHandler              *ScriptHandler
 }
 
 // NewServer creates a new handler instance with dependencies injected by dig.
@@ -56,6 +58,7 @@ func NewServer(params NewServerParams) *Server {
 		KeyImportService:           params.KeyImportService,
 		LogService:                 params.LogService,
 		CommonHandler:              params.CommonHandler,
+		ScriptHandler:              params.ScriptHandler,
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // channelConstructor defines the function signature for creating a new channel proxy.
@@ -40,18 +41,25 @@ func GetChannels() []string {
 
 // Factory is responsible for creating channel proxies.
 type Factory struct {
-	settingsManager *config.SystemSettingsManager
-	clientManager   *httpclient.HTTPClientManager
-	channelCache    map[uint]ChannelProxy
-	cacheLock       sync.Mutex
+	settingsManager  *config.SystemSettingsManager
+	clientManager    *httpclient.HTTPClientManager
+	db               *gorm.DB
+	channelCache     map[uint]ChannelProxy
+	cacheLock        sync.Mutex
+	staticChannels   map[string]channelConstructor
+	dynamicChannels  map[string]channelConstructor
+	mutex            sync.RWMutex
 }
 
 // NewFactory creates a new channel factory.
-func NewFactory(settingsManager *config.SystemSettingsManager, clientManager *httpclient.HTTPClientManager) *Factory {
+func NewFactory(settingsManager *config.SystemSettingsManager, clientManager *httpclient.HTTPClientManager, db *gorm.DB) *Factory {
 	return &Factory{
 		settingsManager: settingsManager,
 		clientManager:   clientManager,
+		db:              db,
 		channelCache:    make(map[uint]ChannelProxy),
+		staticChannels:  channelRegistry,
+		dynamicChannels: make(map[string]channelConstructor),
 	}
 }
 
@@ -68,16 +76,83 @@ func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 
 	logrus.Debugf("Creating new channel for group %d with type '%s'", group.ID, group.ChannelType)
 
+	// First check if this is a dynamic channel type (hot-reloaded scripts)
+	f.mutex.RLock()
+	if dynamicConstructor, exists := f.dynamicChannels[group.ChannelType]; exists {
+		f.mutex.RUnlock()
+		channel, err := dynamicConstructor(f, group)
+		if err != nil {
+			return nil, err
+		}
+		f.channelCache[group.ID] = channel
+		return channel, nil
+	}
+	f.mutex.RUnlock()
+
+	// Then check if this is a static channel type
 	constructor, ok := channelRegistry[group.ChannelType]
-	if !ok {
-		return nil, fmt.Errorf("unsupported channel type: %s", group.ChannelType)
+	if ok {
+		channel, err := constructor(f, group)
+		if err != nil {
+			return nil, err
+		}
+		f.channelCache[group.ID] = channel
+		return channel, nil
 	}
-	channel, err := constructor(f, group)
+
+	// If not a static or dynamic channel, check for script channel
+	scriptChannel, err := f.createScriptChannel(group)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unsupported channel type '%s' and no script found: %w", group.ChannelType, err)
 	}
-	f.channelCache[group.ID] = channel
-	return channel, nil
+
+	f.channelCache[group.ID] = scriptChannel
+	return scriptChannel, nil
+}
+
+// createScriptChannel creates a script-based channel for the given group
+func (f *Factory) createScriptChannel(group *models.Group) (ChannelProxy, error) {
+	// Look for an enabled script with the matching channel type
+	var script models.ChannelScript
+	err := f.db.Where("channel_type = ? AND status = ?", group.ChannelType, "enabled").First(&script).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("no enabled script found for channel type: %s", group.ChannelType)
+		}
+		return nil, fmt.Errorf("failed to query script for channel type %s: %w", group.ChannelType, err)
+	}
+
+	// Create the script channel
+	scriptChannel, err := NewScriptChannel(f, group, &script)
+	if err != nil {
+		// Update script status to error
+		now := time.Now()
+		f.db.Model(&script).Updates(map[string]interface{}{
+			"status":     "error",
+			"error_msg":  err.Error(),
+			"last_error": &now,
+		})
+		return nil, fmt.Errorf("failed to create script channel: %w", err)
+	}
+
+	logrus.Infof("Created script channel '%s' for group %d", script.Name, group.ID)
+	return scriptChannel, nil
+}
+
+// InvalidateCache removes a channel from the cache, forcing recreation on next access
+func (f *Factory) InvalidateCache(groupID uint) {
+	f.cacheLock.Lock()
+	defer f.cacheLock.Unlock()
+	delete(f.channelCache, groupID)
+	logrus.Debugf("Invalidated channel cache for group %d", groupID)
+}
+
+// InvalidateAllCache clears the entire channel cache
+func (f *Factory) InvalidateAllCache() {
+	f.cacheLock.Lock()
+	defer f.cacheLock.Unlock()
+	f.channelCache = make(map[uint]ChannelProxy)
+	logrus.Debug("Invalidated all channel cache")
 }
 
 // newBaseChannel is a helper function to create and configure a BaseChannel.
@@ -150,4 +225,51 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		groupUpstreams:     group.Upstreams,
 		effectiveConfig:    &group.EffectiveConfig,
 	}, nil
+}
+
+// RegisterDynamicChannel registers a dynamic script-based channel constructor
+func (f *Factory) RegisterDynamicChannel(channelType string, constructor channelConstructor) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	f.dynamicChannels[channelType] = constructor
+	logrus.WithField("channel_type", channelType).Info("Dynamic channel registered")
+}
+
+// UnregisterDynamicChannel removes a dynamic channel
+func (f *Factory) UnregisterDynamicChannel(channelType string) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
+	delete(f.dynamicChannels, channelType)
+	logrus.WithField("channel_type", channelType).Info("Dynamic channel unregistered")
+}
+
+// GetRegisteredChannelTypes returns all registered channel types
+func (f *Factory) GetRegisteredChannelTypes() []string {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	var types []string
+
+	// Add static channel types
+	for channelType := range f.staticChannels {
+		types = append(types, channelType)
+	}
+
+	// Add dynamic channel types
+	for channelType := range f.dynamicChannels {
+		types = append(types, channelType)
+	}
+
+	return types
+}
+
+// IsDynamicChannel checks if a channel type is dynamic (script-based)
+func (f *Factory) IsDynamicChannel(channelType string) bool {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	_, exists := f.dynamicChannels[channelType]
+	return exists
 }

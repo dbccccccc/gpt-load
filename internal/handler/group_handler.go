@@ -17,17 +17,16 @@ import (
 	"strings"
 	"time"
 
-	"gpt-load/internal/channel"
-
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 )
 
-// isValidChannelType checks if the channel type is valid by checking against the registered channels.
-func isValidChannelType(channelType string) bool {
-	channels := channel.GetChannels()
-	for _, t := range channels {
+// isValidChannelType checks if the channel type is valid by checking against both static and dynamic channels.
+func (s *Server) isValidChannelType(channelType string) bool {
+	// Get both static and dynamic channel types from the factory
+	channelTypes := s.CommonHandler.channelFactory.GetRegisteredChannelTypes()
+	for _, t := range channelTypes {
 		if t == channelType {
 			return true
 		}
@@ -170,8 +169,8 @@ func (s *Server) CreateGroup(c *gin.Context) {
 	}
 
 	channelType := strings.TrimSpace(req.ChannelType)
-	if !isValidChannelType(channelType) {
-		supported := strings.Join(channel.GetChannels(), ", ")
+	if !s.isValidChannelType(channelType) {
+		supported := strings.Join(s.CommonHandler.channelFactory.GetRegisteredChannelTypes(), ", ")
 		response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Invalid channel type. Supported types are: %s", supported)))
 		return
 	}
@@ -314,8 +313,8 @@ func (s *Server) UpdateGroup(c *gin.Context) {
 
 	if req.ChannelType != nil {
 		cleanedChannelType := strings.TrimSpace(*req.ChannelType)
-		if !isValidChannelType(cleanedChannelType) {
-			supported := strings.Join(channel.GetChannels(), ", ")
+		if !s.isValidChannelType(cleanedChannelType) {
+			supported := strings.Join(s.CommonHandler.channelFactory.GetRegisteredChannelTypes(), ", ")
 			response.Error(c, app_errors.NewAPIError(app_errors.ErrValidation, fmt.Sprintf("Invalid channel type. Supported types are: %s", supported)))
 			return
 		}

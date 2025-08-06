@@ -35,6 +35,7 @@ type App struct {
 	cronChecker       *keypool.CronChecker
 	keyPoolProvider   *keypool.KeyProvider
 	proxyServer       *proxy.ProxyServer
+	scriptManager     *services.ScriptManager
 	storage           store.Store
 	db                *gorm.DB
 	httpServer        *http.Server
@@ -52,6 +53,7 @@ type AppParams struct {
 	CronChecker       *keypool.CronChecker
 	KeyPoolProvider   *keypool.KeyProvider
 	ProxyServer       *proxy.ProxyServer
+	ScriptManager     *services.ScriptManager
 	Storage           store.Store
 	DB                *gorm.DB
 }
@@ -68,6 +70,7 @@ func NewApp(params AppParams) *App {
 		cronChecker:       params.CronChecker,
 		keyPoolProvider:   params.KeyPoolProvider,
 		proxyServer:       params.ProxyServer,
+		scriptManager:     params.ScriptManager,
 		storage:           params.Storage,
 		db:                params.DB,
 	}
@@ -86,6 +89,7 @@ func (a *App) Start() error {
 			&models.APIKey{},
 			&models.RequestLog{},
 			&models.GroupHourlyStat{},
+			&models.ChannelScript{},
 		); err != nil {
 			return fmt.Errorf("database auto-migration failed: %w", err)
 		}
@@ -111,6 +115,13 @@ func (a *App) Start() error {
 		a.requestLogService.Start()
 		a.logCleanupService.Start()
 		a.cronChecker.Start()
+
+		// Start script manager for hot-reloading
+		if err := a.scriptManager.Start(); err != nil {
+			logrus.Errorf("Failed to start script manager: %v", err)
+		} else {
+			logrus.Info("Script manager started with hot-reloading enabled")
+		}
 	} else {
 		logrus.Info("Starting as Slave Node.")
 		a.settingsManager.Initialize(a.storage, a.groupManager, a.configManager.IsMaster())
@@ -178,6 +189,10 @@ func (a *App) Stop(ctx context.Context) {
 			a.logCleanupService.Stop,
 			a.requestLogService.Stop,
 		)
+
+		// Stop script manager
+		a.scriptManager.Stop()
+		logrus.Info("Script manager stopped")
 	}
 
 	var wg sync.WaitGroup

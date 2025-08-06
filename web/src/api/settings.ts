@@ -16,6 +16,18 @@ export interface SettingCategory {
 
 export type SettingsUpdatePayload = Record<string, string | number>;
 
+export interface ChannelTypeInfo {
+  type: string;
+  is_script: boolean;
+  display_name?: string;
+  description?: string;
+  default_test_model?: string;
+  default_validation_endpoint?: string;
+  default_upstream?: string;
+  supported_models?: string[];
+  required_config?: Record<string, string>;
+}
+
 export const settingsApi = {
   async getSettings(): Promise<SettingCategory[]> {
     const response = await http.get("/settings");
@@ -26,6 +38,10 @@ export const settingsApi = {
   },
   async getChannelTypes(): Promise<string[]> {
     const response = await http.get("/channel-types");
+    return response.data || [];
+  },
+  async getChannelTypesWithMetadata(): Promise<ChannelTypeInfo[]> {
+    const response = await http.get("/channel-types-with-metadata");
     return response.data || [];
   },
 };
